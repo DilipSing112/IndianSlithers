@@ -1,15 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>Slither.io | HaiZuka</title>
     <link rel="stylesheet" href="css/style.css">
-    <meta 
-        name='viewport' 
-        content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' 
-    />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
 </head>
-<body></body>
+
+<body>
+    <div id="nickname-overlay"
+        style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;">
+        <form id="nickname-form"
+            style="background:#fff;padding:32px 40px;border-radius:16px;box-shadow:0 4px 32px #0008;display:flex;flex-direction:column;align-items:center;gap:16px;">
+            <h2 style="margin:0 0 12px 0;">Enter your nickname</h2>
+            <input id="nickname-input" type="text" maxlength="16" placeholder="Nickname"
+                style="font-size:1.2em;padding:8px 12px;border-radius:8px;border:1px solid #ccc;outline:none;width:200px;text-align:center;"
+                required autofocus />
+            <button type="submit"
+                style="margin-top:10px;font-size:1.1em;padding:8px 24px;border-radius:8px;background:#4caf50;color:#fff;border:none;cursor:pointer;">Start
+                Game</button>
+        </form>
+    </div>
+    <div id="respawn-overlay"
+        style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:2000;align-items:center;justify-content:center;">
+        <div
+            style="background:#fff;padding:32px 40px;border-radius:16px;box-shadow:0 4px 32px #0008;display:flex;flex-direction:column;align-items:center;gap:16px;">
+            <h2 style="margin:0 0 12px 0;">You Died!</h2>
+            <div id="final-score" style="font-size:1.2em;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:16px;">
+                <button id="respawn-btn"
+                    style="font-size:1.1em;padding:8px 24px;border-radius:8px;background:#4caf50;color:#fff;border:none;cursor:pointer;">Respawn</button>
+                <button id="quit-btn"
+                    style="font-size:1.1em;padding:8px 24px;border-radius:8px;background:#e53935;color:#fff;border:none;cursor:pointer;">Quit</button>
+            </div>
+        </div>
+    </div>
+</body>
 <script type="text/javascript" src="js/food.js"></script>
 <script type="text/javascript" src="js/snake.js"></script>
+<script type="text/javascript">
+    // Nickname and respawn overlay logic
+    window._nickname = null;
+    document.addEventListener('DOMContentLoaded', function () {
+        const overlay = document.getElementById('nickname-overlay');
+        const form = document.getElementById('nickname-form');
+        const input = document.getElementById('nickname-input');
+        const respawnOverlay = document.getElementById('respawn-overlay');
+        const respawnBtn = document.getElementById('respawn-btn');
+        const quitBtn = document.getElementById('quit-btn');
+        const finalScore = document.getElementById('final-score');
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            let nick = input.value.trim();
+            if (!nick) {
+                input.focus();
+                return;
+            }
+            window._nickname = nick;
+            overlay.style.display = 'none';
+            if (typeof window.startGameWithNickname === 'function') {
+                window.startGameWithNickname(nick);
+            }
+        });
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') form.dispatchEvent(new Event('submit'));
+        });
+
+        respawnBtn.addEventListener('click', function () {
+            respawnOverlay.style.display = 'none';
+            if (typeof window.startGameWithNickname === 'function') {
+                window.startGameWithNickname(window._nickname);
+            }
+        });
+
+        quitBtn.addEventListener('click', function () {
+            respawnOverlay.style.display = 'none';
+            // Remove game canvas if exists
+            if (window._gameInstance && window._gameInstance.canvas) {
+                window._gameInstance.canvas.remove();
+            }
+            // Reset global variables
+            game_W = 0; game_H = 0;
+            chX = chY = 1;
+            mySnake = [];
+            FOOD = [];
+            die = false;
+            Xfocus = Yfocus = 0;
+            XX = 0; YY = 0;
+            index = 0;
+            window._gameInstance = null;
+            // Clear stored nickname so player can enter a new one
+            window._nickname = null;
+            // Clear nickname input field
+            input.value = '';
+            // Show nickname overlay (main menu)
+            overlay.style.display = 'flex';
+        });
+
+        // Expose a function to show respawn overlay
+        window.showRespawn = function (score) {
+            if (typeof score === 'number') {
+                finalScore.textContent = 'Your Score: ' + score;
+            } else {
+                finalScore.textContent = '';
+            }
+            respawnOverlay.style.display = 'flex';
+        };
+    });
+</script>
 <script type="text/javascript" src="js/game.js"></script>
+
 </html>

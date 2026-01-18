@@ -79,10 +79,56 @@ names = ["Ahmed Steinke",
     "NamZ Bede"
 ];
 
+
+// --- Power-up balancing constants ---
+const POWERUP_CONFIG = {
+    speed: { duration: 330, spawnChance: 0.1 },
+    invincible: { duration: 200, spawnChance: 0.05 },
+    shrink: { duration: 0, spawnChance: 0.08 },
+    double: { duration: 400, spawnChance: 0.12 }
+};
+const MAX_POWERUPS_ON_MAP = 6;
+const POWERUP_SPAWN_INTERVAL_MIN = 120; // frames
+const POWERUP_SPAWN_INTERVAL_MAX = 360; // frames
+// Patch: allow nickname to be set before game starts
+window.startGameWithNickname = function (nickname) {
+    window._nickname = nickname;
+    // Remove old canvas if exists
+    if (window._gameInstance && window._gameInstance.canvas) {
+        window._gameInstance.canvas.remove();
+    }
+    // Reset global variables for a clean restart
+    game_W = 0; game_H = 0;
+    chX = chY = 1;
+    mySnake = [];
+    FOOD = [];
+    die = false;
+    Xfocus = Yfocus = 0;
+    XX = 0; YY = 0;
+    index = 0;
+    window._gameInstance = new game(nickname);
+};
+
+
 class game {
-    constructor() {
+    draw() {
+        // Draw background
+        this.context.clearRect(0, 0, game_W, game_H);
+        this.context.drawImage(bg_im, Xfocus, Yfocus, 1.5 * game_W, 1.5 * game_H, 0, 0, game_W, game_H);
+        // Draw food
+        for (let i = 0; i < FOOD.length; i++) {
+            if (FOOD[i] && typeof FOOD[i].draw === 'function') FOOD[i].draw();
+        }
+        // Draw snakes
+        for (let i = 0; i < mySnake.length; i++) {
+            if (mySnake[i] && typeof mySnake[i].draw === 'function') mySnake[i].draw();
+        }
+    }
+    constructor(nickname) {
         this.canvas = null;
         this.context = null;
+        this.nickname = nickname || window._nickname || "Player";
+        this._listenersAttached = false;
         this.init();
     }
 
@@ -91,19 +137,35 @@ class game {
         this.context = this.canvas.getContext("2d");
         document.body.appendChild(this.canvas);
 
+        // Set canvas size and game_W/game_H before initializing snakes/food
         this.render();
 
         for (let i = 0; i < Nsnake; i++)
             mySnake[i] = new snake(names[Math.floor(Math.random() * 99999) % names.length], this, Math.floor(2 * minScore + Math.random() * 2 * minScore), (Math.random() - Math.random()) * sizeMap, (Math.random() - Math.random()) * sizeMap);
-        mySnake[0] = new snake("HaiZuka", this, minScore, game_W / 2, game_H / 2);
+        // Use nickname for player snake
+        mySnake[0] = new snake(this.nickname, this, minScore, game_W / 2, game_H / 2);
+        // Fill normal food only
         for (let i = 0; i < NFood; i++) {
             FOOD[i] = new food(this, this.getSize() / (7 + Math.random() * 10), (Math.random() - Math.random()) * sizeMap, (Math.random() - Math.random()) * sizeMap);
         }
 
+        // Power-up spawn timer
+        this._powerupSpawnTimer = this._randPowerupInterval();
+
         this.loop();
 
-        this.listenMouse();
-        this.listenTouch();
+        // Attach listeners only once, after game starts
+        if (!this._listenersAttached) {
+            this._listenersAttached = true;
+            setTimeout(() => {
+                this.listenMouse();
+                this.listenTouch();
+            }, 0);
+        }
+    }
+
+    _randPowerupInterval() {
+        return Math.floor(Math.random() * (POWERUP_SPAWN_INTERVAL_MAX - POWERUP_SPAWN_INTERVAL_MIN + 1)) + POWERUP_SPAWN_INTERVAL_MIN;
     }
 
     listenTouch() {
@@ -216,10 +278,35 @@ class game {
         for (let i = 0; i < mySnake.length; i++)
             for (let j = 0; j < FOOD.length; j++) {
                 if ((mySnake[i].v[0].x - FOOD[j].x) * (mySnake[i].v[0].x - FOOD[j].x) + (mySnake[i].v[0].y - FOOD[j].y) * (mySnake[i].v[0].y - FOOD[j].y) < 1.5 * mySnake[i].size * mySnake[i].size) {
+                    // Power-up logic
+                    if (FOOD[j].powerup && i === 0) {
+                        this.applyPowerUp(FOOD[j].powerup.type);
+                    }
                     mySnake[i].score += Math.floor(FOOD[j].value);
-                    FOOD[j] = new food(this, this.getSize() / (5 + Math.random() * 10), (Math.random() - Math.random()) * 5000 + XX, (Math.random() - Math.random()) * 5000 + YY);
+                    // Respawn food, keep powerup chance and type
+                    let pType = PowerUpTypes[Math.floor(Math.random() * PowerUpTypes.length)];
+                    if (Math.random() < POWERUP_CONFIG[pType.type].spawnChance) {
+                        FOOD[j] = new food(this, this.getSize() * 1.2, (Math.random() - Math.random()) * 5000 + XX, (Math.random() - Math.random()) * 5000 + YY, pType);
+                    } else {
+                        FOOD[j] = new food(this, this.getSize() / (5 + Math.random() * 10), (Math.random() - Math.random()) * 5000 + XX, (Math.random() - Math.random()) * 5000 + YY);
+                    }
                 }
             }
+    }
+
+    // Power-up effect logic
+    applyPowerUp(type) {
+        if (!this._powerupState) this._powerupState = {};
+        let conf = POWERUP_CONFIG[type];
+        if (!conf) return;
+        if (type === 'shrink') {
+            // Instantly shrink snake
+            if (mySnake[0].v.length > 10) {
+                mySnake[0].v = mySnake[0].v.slice(0, Math.max(10, Math.floor(mySnake[0].v.length / 2)));
+            }
+        } else {
+            this._powerupState[type] = conf.duration;
+        }
     }
 
     checkDie() {
@@ -240,9 +327,11 @@ class game {
                         if (i != 0)
                             mySnake[i] = new snake(names[Math.floor(Math.random() * 99999) % names.length], this, Math.max(Math.floor((mySnake[0].score > 10 * minScore) ? mySnake[0].score / 10 : minScore), mySnake[i].score / 10), this.randomXY(XX), this.randomXY(YY));
                         else {
-                            window.alert("Your Score: " + Math.floor(mySnake[i].score));
+                            // Show respawn overlay instead of alert and reload
+                            if (window.showRespawn) {
+                                window.showRespawn(Math.floor(mySnake[i].score));
+                            }
                             die = true;
-                            window.location.href = ".";
                         }
                     }
                 }
@@ -266,67 +355,90 @@ class game {
         }
     }
 
-    draw() {
-        this.clearScreen();
-        for (let i = 0; i < FOOD.length; i++)
-            FOOD[i].draw();
-        for (let i = 0; i < mySnake.length; i++)
-            mySnake[i].draw();
-        this.drawScore();
+    update() {
+        // Power-up timers
+        if (this._powerupState) {
+            for (let k in this._powerupState) {
+                if (this._powerupState[k] > 0) this._powerupState[k]--;
+            }
+        }
+
+        // Power-up food spawn logic
+        let powerupCount = FOOD.filter(f => f && f.powerup).length;
+        if (powerupCount < MAX_POWERUPS_ON_MAP) {
+            this._powerupSpawnTimer--;
+            if (this._powerupSpawnTimer <= 0) {
+                // Find a normal food to replace
+                let normalIndexes = FOOD.map((f, i) => (!f.powerup ? i : -1)).filter(i => i !== -1);
+                if (normalIndexes.length > 0) {
+                    let idx = normalIndexes[Math.floor(Math.random() * normalIndexes.length)];
+                    let pType = PowerUpTypes[Math.floor(Math.random() * PowerUpTypes.length)];
+                    FOOD[idx] = new food(this, this.getSize() * 1.2, (Math.random() - Math.random()) * sizeMap, (Math.random() - Math.random()) * sizeMap, pType);
+                }
+                this._powerupSpawnTimer = this._randPowerupInterval();
+            }
+        }
+
+        this.render();
+        this.unFood();
+        this.changeFood();
+        this.changeSnake();
+        this.updateChXY();
+        this.checkDie();
+
+        // Apply power-up effects to player
+        if (this._powerupState && this._powerupState.speed > 0) {
+            mySnake[0].speed = 2.5;
+        }
+        // Double points
+        if (this._powerupState && this._powerupState.double > 0) {
+            mySnake[0].setDoublePoints(true);
+        } else {
+            mySnake[0].setDoublePoints(false);
+        }
+        // Invincibility
+        if (this._powerupState && this._powerupState.invincible > 0) {
+            mySnake[0].setInvincible(true);
+        } else {
+            mySnake[0].setInvincible(false);
+        }
+
+        mySnake[0].dx = chX;
+        mySnake[0].dy = chY;
+        XX += chX * mySnake[0].speed;
+        YY += chY * mySnake[0].speed;
+        mySnake[0].v[0].x = XX + game_W / 2;
+        mySnake[0].v[0].y = YY + game_H / 2;
     }
 
-    drawScore() {
-        let data = [];
-        for (let i = 0; i < mySnake.length; i++)
-            data[i] = mySnake[i];
-        for (let i = 0; i < data.length - 1; i++)
-            for (let j = i + 1; j < data.length; j++)
-                if (data[i].score < data[j].score) {
-                    let t = data[i];
-                    data[i] = data[j];
-                    data[j] = t;
-                }
-        let index = 0;
-        for (let i = 1; i < mySnake.length; i++)
-            if (data[i].name == "HaiZuka")
-                index = i;
-        this.context.font = this.getSize() / 4 + 'px Arial Black';
-        for (let i = 0; i < 10; i++) {
-            this.context.fillStyle = "#AA0000";
-            if (i == index)
-                this.context.fillStyle = "#CC99FF";
-            this.context.fillText("#" + (i + 1), 3 * game_W / 4, this.getSize() / 2 * (i + 1));
-            this.context.fillText(data[i].name, 3 * game_W / 4 + game_W / 24, this.getSize() / 2 * (i + 1));
-            this.context.fillText(Math.floor(data[i].score), 3 * game_W / 4 + game_W / 5.5, this.getSize() / 2 * (i + 1));
-        }
-        if (index > 9) {
-            this.context.fillStyle = "#CC99FF";
-            this.context.fillText("#" + (index + 1), 3 * game_W / 4, this.getSize() / 2 * (10 + 1));
-            this.context.fillText(data[index].name, 3 * game_W / 4 + game_W / 24, this.getSize() / 2 * (10 + 1));
-            this.context.fillText(Math.floor(data[index].score), 3 * game_W / 4 + game_W / 5.5, this.getSize() / 2 * (10 + 1));
-        }
+    getSize() {
+        // Calculate size based on game dimensions or other logic
+        return Math.max(60, Math.min(game_W, game_H) / 10); // Further increased size for better visual appearance
     }
+
+    // Optionally, move leaderboard rendering to its own method if needed
+    // renderLeaderboard() { ... }
 
     clearScreen() {
         this.context.clearRect(0, 0, game_W, game_H);
         this.context.drawImage(bg_im, Xfocus, Yfocus, 1.5 * game_W, 1.5 * game_H, 0, 0, game_W, game_H);
     }
 
-    getSize() {
-        var area = game_W * game_H;
-        return Math.sqrt(area / 300);
-    }
-
-    range(a, b, c, d) {
-        return Math.sqrt((a - c) * (a - c) + (b - d) * (b - d));
-    }
-
-    randomXY(n) {
-        let ans = 0;
-        while (Math.abs(ans) < 1) {
-            ans = 3 * Math.random() - 3 * Math.random();
-        }
-        return ans * sizeMap + n;
+    unFood() {
+        if (mySnake.length <= 0)
+            return;
+        for (let i = 0; i < mySnake.length; i++)
+            for (let j = 0; j < FOOD.length; j++) {
+                if ((mySnake[i].v[0].x - FOOD[j].x) * (mySnake[i].v[0].x - FOOD[j].x) + (mySnake[i].v[0].y - FOOD[j].y) * (mySnake[i].v[0].y - FOOD[j].y) < 1.5 * mySnake[i].size * mySnake[i].size) {
+                    // Power-up logic
+                    if (FOOD[j].powerup && i === 0) {
+                        this.applyPowerUp(FOOD[j].powerup.type);
+                    }
+                    mySnake[i].score += Math.floor(FOOD[j].value);
+                    // Respawn as normal food only
+                    FOOD[j] = new food(this, this.getSize() / (5 + Math.random() * 10), (Math.random() - Math.random()) * 5000 + XX, (Math.random() - Math.random()) * 5000 + YY);
+                }
+            }
     }
 
     isPoint(x, y) {
@@ -340,6 +452,17 @@ class game {
             return false;
         return true;
     }
+
+    range(x1, y1, x2, y2) {
+        // Calculate the distance between two points (x1, y1) and (x2, y2)
+        return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+    }
+
+    randomXY(center) {
+        // Generate a random coordinate near the given center
+        return center + (Math.random() - Math.random()) * sizeMap / 2;
+    }
 }
 
-var g = new game();
+// Do not auto-start game; wait for nickname input
+// var g = new game();
