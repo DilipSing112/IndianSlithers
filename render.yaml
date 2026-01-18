@@ -1,1 +1,6 @@
-{}
+services:
+  - type: web
+    name: IndianSlithers
+    env: node
+    buildCommand: "npm install"
+    startCommand: "npm start"
