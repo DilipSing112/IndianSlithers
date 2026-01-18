@@ -130,7 +130,28 @@ class game {
         this.context = null;
         this.nickname = nickname || window._nickname || "Player";
         this._listenersAttached = false;
+
+        // Load sound effects
+        this.sounds = {
+            gameplay: new Audio("sounds/gameplay.mp3"),
+            eat: new Audio("sounds/eat.mp3"),
+            achievement: new Audio("sounds/achievement.mp3"),
+            death: new Audio("sounds/death.mp3")
+        };
+
+        // Loop gameplay sound
+        this.sounds.gameplay.loop = true;
+        this.sounds.gameplay.volume = 0.5;
+        this.sounds.gameplay.play();
+
         this.init();
+    }
+
+    playSound(soundName) {
+        if (this.sounds[soundName]) {
+            this.sounds[soundName].currentTime = 0;
+            this.sounds[soundName].play();
+        }
     }
 
     init() {
@@ -282,7 +303,9 @@ class game {
                     // Power-up logic
                     if (FOOD[j].powerup && i === 0) {
                         this.applyPowerUp(FOOD[j].powerup.type);
+                        this.playSound("achievement"); // Play achievement sound
                     }
+                    this.playSound("eat"); // Play eating sound
                     mySnake[i].score += Math.floor(FOOD[j].value);
                     // Respawn food, keep powerup chance and type
                     let pType = PowerUpTypes[Math.floor(Math.random() * PowerUpTypes.length)];
@@ -332,6 +355,7 @@ class game {
                             const killerName = mySnake[j].name;
                             const rank = [...mySnake].sort((a, b) => b.score - a.score).findIndex(snake => snake === mySnake[i]) + 1;
                             if (window.showRespawn) {
+                                this.playSound("death"); // Play death sound
                                 window.showRespawn({
                                     message: `You were killed by ${killerName}.`,
                                     score: Math.floor(mySnake[i].score),
@@ -454,7 +478,9 @@ class game {
                     // Power-up logic
                     if (FOOD[j].powerup && i === 0) {
                         this.applyPowerUp(FOOD[j].powerup.type);
+                        this.playSound("achievement"); // Play achievement sound
                     }
+                    this.playSound("eat"); // Play eating sound
                     mySnake[i].score += Math.floor(FOOD[j].value);
                     // Respawn as normal food only
                     FOOD[j] = new food(this, this.getSize() / (5 + Math.random() * 10), (Math.random() - Math.random()) * 5000 + XX, (Math.random() - Math.random()) * 5000 + YY);
@@ -515,6 +541,44 @@ class game {
         }
     }
 }
+
+// WebSocket client setup
+const socket = io("http://localhost:8000");
+
+// Send player movement to server
+function sendPlayerMove() {
+    if (mySnake[0]) {
+        socket.emit("playerMove", { x: mySnake[0].v[0].x, y: mySnake[0].v[0].y, score: mySnake[0].score });
+    }
+}
+
+// Listen for updates from server
+socket.on("updatePlayers", (players) => {
+    Object.keys(players).forEach((id) => {
+        if (id !== socket.id) {
+            const playerData = players[id];
+            let snake = mySnake.find(s => s.id === id);
+
+            if (!snake) {
+                // Create a new snake for the player if it doesn't exist
+                snake = new snake(`Player ${id}`, window._gameInstance, playerData.score, playerData.x, playerData.y);
+                snake.id = id; // Assign the player's ID to the snake
+                mySnake.push(snake);
+            } else {
+                // Update existing snake's position and score
+                snake.v[0].x = playerData.x;
+                snake.v[0].y = playerData.y;
+                snake.score = playerData.score;
+            }
+        }
+    });
+
+    // Remove snakes for disconnected players
+    mySnake = mySnake.filter(s => s.id === socket.id || players[s.id]);
+});
+
+// Update player movement periodically
+setInterval(sendPlayerMove, 100);
 
 // Do not auto-start game; wait for nickname input
 // var g = new game();
