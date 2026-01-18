@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,8 +12,28 @@ const io = new Server(server, {
     }
 });
 
-// Serve static files (game files)
-app.use(express.static('public'));
+// Serve static files (game files) from the root directory
+app.use(express.static(__dirname));
+
+// Log all static file requests
+app.use((req, res, next) => {
+    console.log(`Static file requested: ${req.url}`);
+    next();
+});
+
+// Add a fallback route to serve index.html for the root path
+app.get('/', (req, res) => {
+    console.log('Serving index.html from:', __dirname + '/index.html');
+    res.sendFile(__dirname + '/index.html');
+});
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+});
 
 // Store player data
 let players = {};

@@ -1,8 +1,8 @@
-# Basic Slither Game
+# Basic IndianSlithers Game
 
 <p align="center"> <img src="./images/gif/demo.gif" alt="bg" /> </p>
 
-The Basic Slither Game is written in JavaScript and utilizes HTML5 canvas for graphics rendering. This game is inspired by classic games such as Slither.io, Snake, ... and optimized to run on all devices.
+The Basic IndianSlithers Game is written in JavaScript and utilizes HTML5 canvas for graphics rendering. This game is inspired by classic games such as IndianSlithers, Snake, ... and optimized to run on all devices.
 
 ## How to Play
 - Use arrow keys to move the snake
@@ -12,7 +12,7 @@ The Basic Slither Game is written in JavaScript and utilizes HTML5 canvas for gr
 
 ## Installation
 
-Play directly [here](https://zukahai.github.io/slither.io/)
+Play directly [here](https://zukahai.github.io/IndianSlithers/)
 
 Or download and open the `index.html` file in a web browser.
 
